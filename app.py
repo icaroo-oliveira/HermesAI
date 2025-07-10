@@ -1,81 +1,103 @@
-import chainlit as cl
-from langchain.agents import AgentExecutor, create_react_agent
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.tools import Tool
 import os
-from dotenv import load_dotenv 
+from dotenv import load_dotenv
+import chainlit as cl
 
-load_dotenv() 
+from tools import criar_evento_na_agenda
 
+from langchain.agents import initialize_agent, AgentType
+from langchain_huggingface import ChatHuggingFace, HuggingFaceEndpoint
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain.tools.render import render_text_description
 
-#MODELO
-MODELO_ESCOLHIDO = "GEMINI"
-
-
-openai_api_key = os.environ.get("OPENAI_API_KEY")
-google_api_key = os.environ.get("GOOGLE_API_KEY")
-
-
-if MODELO_ESCOLHIDO == "OPENAI":
-    from langchain_openai import ChatOpenAI
-    print("Usando o modelo da OpenAI (GPT)")
-    llm = ChatOpenAI(model="gpt-4o", temperature=0, api_key=openai_api_key) # Passamos a chave aqui
-elif MODELO_ESCOLHIDO == "GEMINI":
-    from langchain_google_genai import ChatGoogleGenerativeAI
-    print("Usando o modelo do Google (Gemini)")
-    llm = ChatGoogleGenerativeAI(model="gemini-1.5-pro-latest", temperature=0, google_api_key=google_api_key, convert_system_message_to_human=True) # E aqui
-else:
-    raise ValueError("Modelo não suportado. Escolha 'OPENAI' ou 'GEMINI'.")
+#carregando variáveis de ambiente
+load_dotenv()
+hf_token = os.environ["HUGGINGFACEHUB_API_TOKEN"]
 
 
-#(TOOLS)
-tools = [
-    Tool(
-        name="ferramenta_exemplo",
-        func=lambda x: "Esta é uma ferramenta de exemplo. Ainda não sei fazer nada.",
-        description="Uma ferramenta de exemplo que não faz nada útil ainda.",
-    )
-]
+hf_llm = HuggingFaceEndpoint(
+    repo_id="meta-llama/Meta-Llama-3-8B-Instruct",
+    task="text-generation",
+    max_new_tokens=512,
+    do_sample=True,
+    temperature=0.7,
+    huggingfacehub_api_token=hf_token
+)
 
-#PROMPT DO AGENTE v1
-prompt_template = """
-Você é um assistente pessoal. Responda ao usuário da melhor forma possível.
-Você tem acesso às seguintes ferramentas:
-{tools}
-Use o seguinte formato:
-Pergunta: a pergunta de entrada que você deve responder
-Pensamento: você deve sempre pensar sobre o que fazer
-Ação: a ação a ser tomada, deve ser uma das [{tool_names}]
-Entrada da Ação: a entrada para a ação
-Observação: o resultado da ação
-... (este Pensamento/Ação/Entrada da Ação/Observação pode se repetir N vezes)
-Pensamento: Agora eu sei a resposta final
-Resposta Final: a resposta final para a pergunta original
-Comece!
-Pergunta: {input}
-Pensamento: {agent_scratchpad}
+
+llm = ChatHuggingFace(llm=hf_llm, verbose=True)
+
+#tools 
+tools = [criar_evento_na_agenda]
+tool_desc = render_text_description(tools)
+
+#prompt
+custom_prompt = f"""Você é o Icarus, um assistente pessoal inteligente e amigável.
+
+CAPACIDADES:
+- Você tem acesso a ferramentas para ajudar o usuário
+- Você pode agendar eventos na agenda do Google
+- Você pode conversar naturalmente e responder perguntas
+
+FERRAMENTAS DISPONÍVEIS:
+{tool_desc}
+
+COMO USAR A FERRAMENTA DE AGENDA:
+Quando o usuário pedir para agendar algo, use a ferramenta criar_evento_na_agenda com:
+- titulo: o título do evento
+- data_hora_inicio_str: data e hora no formato ISO (ex: '2025-07-15T14:30:00-03:00')
+- duracao_minutos: duração em minutos (opcional, padrão 60)
+
+EXEMPLOS:
+- "Agende uma reunião amanhã às 15h" → criar_evento_na_agenda(titulo="Reunião", data_hora_inicio_str="2025-07-11T15:00:00-03:00")
+- "Marque consulta médica para sexta às 10h" → criar_evento_na_agenda(titulo="Consulta médica", data_hora_inicio_str="2025-07-11T10:00:00-03:00")
+
+IMPORTANTE:
+- Sempre converta datas relativas (hoje, amanhã, sexta) para datas específicas
+- Use o fuso horário -03:00 (Brasil)
+- Seja amigável e conversacional
+- Se não souber a data exata, pergunte ao usuário
+
+SOBRE CONFLITOS DE HORÁRIO:
+- Se o usuário pedir para agendar em um horário que pode ter conflito, sugira horários alternativos
+- Exemplos de sugestões: "Que tal às 16h em vez de 15h?" ou "Posso sugerir 14h ou 16h?"
+- Se o usuário não especificar horário, sugira opções: "Que horário você prefere? Posso sugerir 10h, 14h ou 16h"
+
+Agora responda ao usuário e use as ferramentas quando necessário!
 """
-prompt = ChatPromptTemplate.from_template(prompt_template)
 
+#agente com prompt customizado
+agent_executor = initialize_agent(
+    tools=tools,
+    llm=llm,
+    agent=AgentType.STRUCTURED_CHAT_ZERO_SHOT_REACT_DESCRIPTION,
+    verbose=True,
+    agent_kwargs={
+        "prefix": custom_prompt
+    }
+)
+
+#histórico por sessão
+chat_histories = {}
 
 @cl.on_chat_start
 async def start():
-    agent = create_react_agent(llm, tools, prompt)
-    agent_executor = AgentExecutor(
-        agent=agent,
-        tools=tools,
-        verbose=True,
-        handle_parsing_errors=True,
-    )
-    cl.user_session.set("agent_executor", agent_executor)
-    await cl.Message(content=f"Olá! Sou seu assistente pessoal, usando o modelo {MODELO_ESCOLHIDO}. Como posso ajudar?").send()
-
+    session = cl.user_session.get("id")
+    chat_histories[session] = []
+    await cl.Message(content="Olá! Sou Icarus, seu assistente pessoal. Posso ajudar com conversas e agendar eventos na sua agenda! Como posso ajudar?").send()
 
 @cl.on_message
 async def main(message: cl.Message):
-    agent_executor = cl.user_session.get("agent_executor")
-    cb = cl.LangchainCallbackHandler(stream_final_answer=True)
-    await agent_executor.ainvoke(
-        {"input": message.content},
-        callbacks=[cb]
-    )
+    session = cl.user_session.get("id")
+    hist = chat_histories.setdefault(session, [])
+
+    #versão síncrona sem async
+    result = agent_executor.run(input=message.content, chat_history=hist)
+
+    #outra versao async usando asyncio_to_thread
+    # from langchain.utilities.asyncio import asyncio_to_thread
+    # result = await asyncio_to_thread(agent_executor.run, input=message.content, chat_history=hist)
+
+    await cl.Message(content=result).send()
+
+    hist.append({"role": "user", "content": message.content})
+    hist.append({"role": "assistant", "content": result})
