@@ -80,6 +80,7 @@ def criar_evento_na_agenda(state: Any) -> Any:
     
 
 def email_handler(state: Any) -> Any:
+    print("função chamada a do email")
     """
     Lê e lista os 10 e-mails mais recentes da caixa de entrada (INBOX) do usuário autenticado no Gmail.
     Atualiza o estado com os e-mails encontrados e a resposta para o usuário.

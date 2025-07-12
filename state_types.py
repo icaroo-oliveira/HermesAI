@@ -16,3 +16,4 @@ class IcarusState(TypedDict):
     agenda: AgendaData
     email: EmailData
     invocation: Optional[Any] 
+    decisions: List[Optional[str]]

@@ -28,6 +28,8 @@ def obter_previsao_tempo_weatherapi(cidade="Feira de Santana", api_key=None):
 
 
 def buscar_na_web_duckduckgo(state: IcarusState) -> IcarusState:
+    print("função chamada a de busca")
+
     query = state["user_input"]  
     url = f"https://duckduckgo.com/html/?q={quote(query)}"
     headers = {"User-Agent": "Mozilla/5.0"}
