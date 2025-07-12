@@ -1,22 +1,25 @@
 from langgraph.graph import StateGraph, START, END
-from utils import add_to_history
+from utils import add_to_history,buscar_na_web_duckduckgo
 from tools import criar_evento_na_agenda, email_handler, listar_eventos_periodo, existe_conflito_agenda
 from llm_utils import llm_ask, extract_event_prompt
 from typing import Any
 import re
 from date_extractor import extrair_datas_periodo_llm
+from state_types import IcarusState
+
 
 # Nó decisor
 async def decision_node(state: Any) -> Any:
     decision_prompt = """
-Você é Icarus, um assistente pessoal inteligente. Sua tarefa é analisar a mensagem do usuário e decidir se ele está pedindo para AGENDAR um evento, LER EMAILS, LISTAR EVENTOS/COMPROMISSOS ou apenas deseja CONVERSAR normalmente.
+Você é Icarus, um assistente pessoal inteligente. Sua tarefa é analisar a mensagem do usuário e decidir se ele está pedindo para AGENDAR um evento, LER EMAILS, LISTAR EVENTOS/COMPROMISSOS, FAZER UMA BUSCA NA WEB, ou apenas deseja CONVERSAR normalmente.
 
 REGRAS:
 - Se a mensagem do usuário for um pedido explícito para criar, marcar, agendar, adicionar ou alterar um evento, reunião, compromisso, consulta, etc., responda apenas com: AGENDAR
 - Se a mensagem pedir explicitamente para ler, mostrar, listar, acessar ou buscar e-mails, responda apenas com: EMAIL
 - Se a mensagem pedir para listar, mostrar, exibir, consultar, ver, saber, ou perguntar sobre compromissos, eventos, agenda, reuniões já marcadas, responda apenas com: LISTAR_EVENTOS
+- Se a mensagem pedir para buscar informações na internet, procurar algo online, pesquisar na web, responder dúvidas com dados externos, responda apenas com: BUSCAR_WEB
 - Se a mensagem for uma pergunta, comentário, pedido de tradução, explicação, resumo, ou qualquer referência a informações já apresentadas anteriormente, responda apenas com: CONVERSAR
-- Não explique sua resposta, apenas retorne AGENDAR, EMAIL, LISTAR_EVENTOS ou CONVERSAR.
+- Não explique sua resposta, apenas retorne AGENDAR, EMAIL, LISTAR_EVENTOS, BUSCAR_WEB ou CONVERSAR.
 
 Exemplos:
 Usuário: "Agende uma reunião amanhã às 15h"
@@ -31,6 +34,9 @@ Resposta: LISTAR_EVENTOS
 Usuário: "O que tenho na agenda amanhã?"
 Resposta: LISTAR_EVENTOS
 
+Usuário: "Quem ganhou o jogo ontem? Me diga pelo que está na internet."
+Resposta: BUSCAR_WEB
+
 Usuário: "Traduza o último e-mail retornado"
 Resposta: CONVERSAR
 
@@ -39,8 +45,9 @@ Resposta: CONVERSAR
 
 Mensagem do usuário: {mensagem_usuario}
 
-Responda apenas com AGENDAR, EMAIL, LISTAR_EVENTOS ou CONVERSAR.
+Responda apenas com AGENDAR, EMAIL, LISTAR_EVENTOS, BUSCAR_WEB ou CONVERSAR.
 """.replace('{mensagem_usuario}', state["user_input"])
+    
     decision = (await llm_ask(decision_prompt, state["messages"])).strip().upper()
     decision = re.sub(r'[^A-Z_]', '', decision)
     state["decision"] = decision
@@ -123,6 +130,12 @@ def build_graph(IcarusState):
     graph.add_node("extrair_datas_agendamento_llm_node", extrair_datas_agendamento_llm_node)
     graph.add_node("extrair_datas_listagem_llm_node", extrair_datas_listagem_llm_node)
     graph.add_node("add_assistant_history", lambda state: add_to_history(state, "assistant", state["invocation"]))
+
+    
+    graph.add_node("buscar_internet", buscar_na_web_duckduckgo)
+
+
+
     graph.add_edge(START, "add_user_history")
     graph.add_edge("add_user_history", "decision_node")
     # Adapte o roteamento condicional para reconhecer 'LISTAR_EVENTOS'
@@ -136,7 +149,8 @@ def build_graph(IcarusState):
             "AGENDAR": "extrair_datas_agendamento_llm_node",
             "EMAIL": "email_handler",
             "CONVERSAR": "conversa_node",
-            "LISTAR_EVENTOS": "extrair_datas_listagem_llm_node"
+            "LISTAR_EVENTOS": "extrair_datas_listagem_llm_node",
+            "BUSCAR_WEB":"buscar_internet"
         }
     )
     # AGENDAR: extrair_datas_agendamento_llm_node -> make_appointment -> add_assistant_history
@@ -147,6 +161,13 @@ def build_graph(IcarusState):
     graph.add_edge("listar_eventos_periodo_node", "add_assistant_history")
     graph.add_edge("email_handler", "add_assistant_history")
     graph.add_edge("conversa_node", "add_assistant_history")
+
+    #buscar na web
+
+    graph.add_edge("buscar_internet", "add_assistant_history")
+
+
+
     graph.add_edge("add_assistant_history", END)
     compiled_graph = graph.compile()
     return compiled_graph 

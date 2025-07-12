@@ -4,23 +4,7 @@ import chainlit as cl
 from typing import TypedDict, Optional, List, Dict, Any
 from graph_setup import build_graph
 from utils import obter_previsao_tempo_weatherapi
-
-class AgendaData(TypedDict, total=False):
-    titulo: Optional[str]
-    data_hora_inicio_str: Optional[str]
-    duracao_minutos: Optional[int]
-
-class EmailData(TypedDict, total=False):
-    emails: Optional[List[Dict[str, Any]]]
-    email_selecionado: Optional[Dict[str, Any]]
-
-class IcarusState(TypedDict):
-    user_input: str  # Texto enviado pelo usuário
-    decision: Optional[str]  # "AGENDAR", "EMAIL" ou "CONVERSAR"
-    messages: List[Dict[str, Any]]  # Histórico de mensagens
-    agenda: AgendaData  # Dados de agendamento
-    email: EmailData   # Dados de e-mail
-    invocation: Optional[Any]  # Resultado da última ação
+from state_types import IcarusState
 
 load_dotenv()
 
