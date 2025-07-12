@@ -1,6 +1,9 @@
 from langgraph.graph import StateGraph, START, END
-from utils import add_to_history,buscar_na_web_duckduckgo
-from tools import criar_evento_na_agenda, email_handler, listar_eventos_periodo, existe_conflito_agenda
+from utils import add_to_history
+from tools.websearch import buscar_na_web_duckduckgo
+from tools.agenda import criar_evento_na_agenda, listar_eventos_periodo, existe_conflito_agenda
+from tools.email import email_handler
+from tools.weather import obter_previsao_tempo_weatherapi
 from llm_utils import llm_ask, extract_event_prompt
 from typing import Any
 import re
@@ -11,24 +14,39 @@ from state_types import IcarusState
 # Nó decisor
 # Nó decisor com múltiplas intenções
 async def decision_node(state: Any) -> Any:
-    decision_prompt = """
-Você é Icarus, um assistente pessoal inteligente. Sua tarefa é analisar a mensagem do usuário e retornar uma ou mais das seguintes ações que precisam ser realizadas:
+    decision_prompt = '''
+Você é Icarus, um assistente pessoal inteligente e contextual. Analise a mensagem do usuário e identifique quais ações, se houver, precisam ser realizadas. As ações possíveis são:
 
-- AGENDAR → quando o usuário deseja marcar, adicionar ou alterar um compromisso, evento ou reunião
-- EMAIL → quando o usuário pede para ler, buscar ou listar e-mails
-- LISTAR_EVENTOS → quando o usuário quer saber o que está na agenda ou ver eventos futuros/passados
-- BUSCAR_WEB → quando o usuário quer informações externas, como notícias, fatos ou pesquisas gerais
-- CONVERSAR → quando o usuário está apenas conversando, pedindo explicações, traduções ou interagindo sem nenhuma ação específica
+- AGENDAR: quando o usuário pede para marcar, adicionar ou alterar um compromisso, evento ou reunião.
+- EMAIL: quando o usuário pede para ler, buscar ou listar e-mails.
+- LISTAR_EVENTOS: quando o usuário pede para ver compromissos, agenda, eventos futuros ou passados.
+- BUSCAR_WEB: quando o usuário pede informações externas, como notícias, fatos, pesquisas, previsão do tempo, etc.
+- CONVERSAR: quando o usuário está apenas conversando, fazendo comentários, perguntas retóricas, piadas, ou não faz um pedido de ação claro.
 
 REGRAS:
-- Retorne uma lista separada por vírgulas com as ações detectadas, em letras maiúsculas.
-- Não explique sua resposta.
-- Retorne apenas combinações válidas dessas palavras (máximo 3).
+- Analise o contexto, o tom e a intenção da mensagem.
+- Considere o histórico recente da conversa: se o usuário pedir para repetir, mostrar novamente, detalhar, relembrar ou referenciar uma ação já realizada (como links buscados, evento agendado, e-mails lidos, etc.), responda com base no histórico, sem acionar a ferramenta novamente.
+- Só acione BUSCAR_WEB, AGENDAR, EMAIL ou LISTAR_EVENTOS se houver um pedido claro ou implícito de ação nova.
+- Se a mensagem for apenas um comentário, curiosidade, piada ou pergunta retórica, classifique como CONVERSAR.
+- Se houver múltiplos pedidos, retorne todas as ações relevantes, separadas por vírgula, na ordem em que aparecem na mensagem.
+- Responda apenas com as palavras-chave das ações, separadas por vírgula, sem explicações.
+- Não invente ações. Se não tiver certeza, prefira CONVERSAR.
 
-Exemplos:
+Exemplos de contexto:
+Usuário: "Me mostre de novo os links dos jogos do Flamengo"
+Resposta: CONVERSAR (responda mostrando os links buscados anteriormente, sem buscar de novo)
+
+Usuário: "Qual foi o último evento que marquei?"
+Resposta: CONVERSAR (responda com o evento agendado mais recente, sem acionar a agenda)
+
+Usuário: "Repita meus e-mails de hoje"
+Resposta: CONVERSAR (responda com os e-mails já lidos, sem buscar de novo)
 
 Usuário: "Me diga quando o Flamengo joga e marque uma reunião às 15h amanhã"
 Resposta: BUSCAR_WEB, AGENDAR
+
+Usuário: "Sabia que o Flamengo vai jogar amanhã?"
+Resposta: CONVERSAR
 
 Usuário: "Liste meus compromissos de hoje e mostre meus e-mails"
 Resposta: LISTAR_EVENTOS, EMAIL
@@ -42,10 +60,50 @@ Resposta: CONVERSAR
 Usuário: "Traduza esse texto e me diga quem é o presidente do Brasil"
 Resposta: CONVERSAR, BUSCAR_WEB
 
-Mensagem do usuário: {mensagem_usuario}
+Usuário: "Me lembre de comprar pão e veja se vai chover amanhã"
+Resposta: AGENDAR, BUSCAR_WEB
 
-Responda apenas com uma lista separada por vírgulas: AGENDAR, EMAIL, LISTAR_EVENTOS, BUSCAR_WEB, CONVERSAR.
-""".replace('{mensagem_usuario}', state["user_input"])
+Usuário: "Qual a previsão do tempo para amanhã?"
+Resposta: BUSCAR_WEB
+
+Usuário: "Você gosta de futebol?"
+Resposta: CONVERSAR
+
+Usuário: "Me envie meus e-mails e marque dentista para sexta"
+Resposta: EMAIL, AGENDAR
+
+Usuário: "Quais meus compromissos amanhã?"
+Resposta: LISTAR_EVENTOS
+
+Usuário: "Me conte uma piada e mostre minha agenda de hoje"
+Resposta: CONVERSAR, LISTAR_EVENTOS
+
+Usuário: "Qual a capital da França?"
+Resposta: BUSCAR_WEB
+
+Usuário: "Me diga o clima e me envie meus e-mails"
+Resposta: BUSCAR_WEB, EMAIL
+
+Usuário: "Bom dia!"
+Resposta: CONVERSAR
+
+Usuário: "Me lembre de estudar e me diga as notícias do dia"
+Resposta: AGENDAR, BUSCAR_WEB
+
+Usuário: "Você sabe quando é o próximo feriado?"
+Resposta: BUSCAR_WEB
+
+Usuário: "Marque reunião para amanhã e me diga se vai chover"
+Resposta: AGENDAR, BUSCAR_WEB
+
+Usuário: "Meus e-mails e compromissos de hoje, por favor"
+Resposta: EMAIL, LISTAR_EVENTOS
+
+Usuário: "Me mostre meus e-mails, minha agenda e pesquise notícias do Flamengo"
+Resposta: EMAIL, LISTAR_EVENTOS, BUSCAR_WEB
+
+Mensagem do usuário: {mensagem_usuario}
+'''.replace('{mensagem_usuario}', state["user_input"])
 
     #faz a chamada ao LLM
     resposta = (await llm_ask(decision_prompt, state["messages"])).strip().upper()

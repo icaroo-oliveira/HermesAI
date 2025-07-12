@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 import chainlit as cl
 from typing import TypedDict, Optional, List, Dict, Any
 from graph_setup import build_graph
-from utils import obter_previsao_tempo_weatherapi
+from tools.weather import obter_previsao_tempo_weatherapi
 from state_types import IcarusState
 
 load_dotenv()
