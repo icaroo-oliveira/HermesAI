@@ -142,6 +142,12 @@ async def extrair_datas_listagem_llm_node(state):
     return await extrair_datas_periodo_llm(state)
 
 
+def add_all_assistant_history(state):
+    for resposta in state.get("invocations_list", []):
+        add_to_history(state, "assistant", resposta)
+    return state
+
+
 def build_graph(IcarusState):
     graph = StateGraph(IcarusState)
     graph.add_node("add_user_history", lambda state: add_to_history(state, "user", state["user_input"]))
@@ -153,7 +159,7 @@ def build_graph(IcarusState):
     graph.add_node("listar_eventos_periodo_node", make_listar_eventos_periodo_node())
     graph.add_node("extrair_datas_agendamento_llm_node", extrair_datas_agendamento_llm_node)
     graph.add_node("extrair_datas_listagem_llm_node", extrair_datas_listagem_llm_node)
-    graph.add_node("add_assistant_history", lambda state: add_to_history(state, "assistant", state["invocation"]))
+    graph.add_node("add_assistant_history", add_all_assistant_history)
 
     
     graph.add_node("buscar_internet", buscar_na_web_duckduckgo)

@@ -55,12 +55,10 @@ def buscar_na_web_duckduckgo(state: IcarusState) -> IcarusState:
     except Exception as e:
         resultado = f"Erro ao buscar: {e}"
 
-    #atualiza o state
-    return {
-        **state,
-        "invocation": resultado,
-        "websearch": {
-            "query": query,
-            "search_results": resultado
-        }
+    state['invocation'] = resultado
+    state['invocations_list'].append(resultado)
+    state['websearch'] = {
+        "query": query,
+        "search_results": resultado
     }
+    return state

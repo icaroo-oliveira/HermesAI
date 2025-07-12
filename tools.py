@@ -68,14 +68,17 @@ def criar_evento_na_agenda(state: Any) -> Any:
         print(f"[DEBUG] Evento a ser criado: {event}")
         created_event = service.events().insert(calendarId="primary", body=event).execute()
         resposta = f"Evento '{titulo}' criado com sucesso! Link: {created_event.get('htmlLink')}"
-        print(f"[DEBUG] Evento criado com sucesso: {created_event.get('htmlLink')}")
+        resposta = resposta.strip()
         state["invocation"] = resposta
+        state["invocations_list"].append(resposta)
         print("[DEBUG] Saindo de criar_evento_na_agenda com sucesso")
         return state
     except Exception as e:
         resposta = f"Ocorreu um erro ao criar o evento: {e}"
+        resposta = resposta.strip()
         print(f"[DEBUG] ERRO em criar_evento_na_agenda: {e}")
         state["invocation"] = resposta
+        state["invocations_list"].append(resposta)
         return state
     
 
@@ -97,7 +100,9 @@ def email_handler(state: Any) -> Any:
         if not messages:
             print("No messages found.")
             resposta = "Nenhum e-mail encontrado na caixa de entrada."
+            resposta = resposta.strip()
             state["invocation"] = resposta
+            state["invocations_list"].append(resposta)
             return state
 
         print("Messages:")
@@ -115,13 +120,17 @@ def email_handler(state: Any) -> Any:
         state["email"]["emails"] = emails
         # Formata a resposta para o usuário
         resposta = "Assuntos dos e-mails encontrados:\n" + "\n".join(f"- {e['assunto']}" for e in emails)
+        resposta = resposta.strip()
         state["invocation"] = resposta
+        state["invocations_list"].append(resposta)
         return state
 
     except HttpError as error:
         print(f"An error occurred: {error}")
         resposta = f"Ocorreu um erro ao listar os e-mails: {error}"
+        resposta = resposta.strip()
         state["invocation"] = resposta
+        state["invocations_list"].append(resposta)
         return state
 
 
@@ -207,5 +216,7 @@ def listar_eventos_periodo(state, data_inicial, data_final=None):
             hora = ev.get('start', {}).get('dateTime', '')
             resumo = ev.get('summary', '(sem título)')
             resposta += f"- {resumo} às {hora}\n"
-    state['invocation'] = resposta.strip()
+    resposta = resposta.strip()
+    state['invocation'] = resposta
+    state['invocations_list'].append(resposta)
     return state

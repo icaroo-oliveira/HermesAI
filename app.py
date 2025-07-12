@@ -21,6 +21,7 @@ async def start():
         "agenda": {},
         "email": {},
         "invocation": None,
+        "invocations_list": [],
     }
     chat_histories[session] = initial_state
     compiled_graph = build_graph(IcarusState)
@@ -37,10 +38,13 @@ async def main(message: cl.Message):
     state = chat_histories.get(session)
     compiled_graph = chat_histories.get(session + "_graph")
     state["user_input"] = message.content
+    # Limpa a lista de respostas antes de processar nova mensagem
+    state["invocations_list"] = []
     result_state = await compiled_graph.ainvoke(state)
     chat_histories[session] = result_state
-    resposta = result_state["invocation"]
-    await cl.Message(content=resposta).send()
+    respostas = result_state.get("invocations_list", [])
+    resposta_final = "\n\n".join(respostas) if respostas else result_state.get("invocation", "")
+    await cl.Message(content=resposta_final).send()
     
 
     

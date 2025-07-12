@@ -17,3 +17,4 @@ class IcarusState(TypedDict):
     email: EmailData
     invocation: Optional[Any] 
     decisions: List[Optional[str]]
+    invocations_list:List[str]
