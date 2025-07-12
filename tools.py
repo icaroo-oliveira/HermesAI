@@ -1,14 +1,12 @@
 import os.path
-from datetime import datetime, timedelta
+from typing import Any
 
-from langchain.tools import tool
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-
 
 SCOPES = ["https://www.googleapis.com/auth/calendar","https://www.googleapis.com/auth/gmail.readonly"]
 
@@ -37,42 +35,25 @@ def get_permission_google_service(tool_type,version):
 
 #gmail e v1...
 
-def criar_evento_na_agenda(data):
+def criar_evento_na_agenda(state: Any) -> Any:
     """
-    Cria um evento no Google Calendar do usuário autenticado.
-
-    Parâmetros:
-        data (dict): Dicionário com as seguintes chaves:
-            - 'titulo' (str, opcional): Título do evento. Padrão: 'Evento'.
-            - 'data_hora_inicio_str' (str, obrigatório): Data e hora de início no formato ISO 8601, ex: '2025-07-10T10:00:00-03:00'.
-            - 'duracao_minutos' (int, opcional): Duração do evento em minutos. Padrão: 60.
-
-    Retorna:
-        str: Mensagem de confirmação com o link do evento criado, ou mensagem de erro em caso de falha.
-
-    Requisitos:
-        - O arquivo 'credentials.json' deve estar presente para autenticação Google.
-        - O usuário deve conceder permissão na primeira execução.
+    Cria um evento no Google Calendar do usuário autenticado, usando os dados em state['agenda'].
+    Atualiza o estado com a confirmação ou erro em state['invocation'].
     """
-    
-    titulo = data.get('titulo', 'Evento')
-    data_hora_inicio_str = data.get('data_hora_inicio_str', None)
-    duracao_minutos = data.get('duracao_minutos', 60)
-    
-    print(f"FERRAMENTA CHAMADA: criar_evento_na_agenda")
-    print(f"Argumentos recebidos: titulo='{titulo}', data_hora='{data_hora_inicio_str}', duracao={duracao_minutos}")
-    
-    
+    print("[DEBUG] Entrando em criar_evento_na_agenda")
     try:
-        print("Obtendo serviço do Google Calendar...")
+        data = state["agenda"]
+        print(f"[DEBUG] Dados recebidos para agendamento: {data}")
+        # --- Lógica original de criação de evento ---
+        titulo = data.get('titulo', 'Evento')
+        data_hora_inicio_str = data.get('data_hora_inicio_str', None)
+        duracao_minutos = data.get('duracao_minutos', 60)
+        print(f"FERRAMENTA CHAMADA: criar_evento_na_agenda")
+        print(f"Argumentos recebidos: titulo='{titulo}', data_hora='{data_hora_inicio_str}', duracao={duracao_minutos}")
+        from datetime import datetime, timedelta
         service = get_permission_google_service("calendar","v3")
-        print("Serviço obtido com sucesso!")
-
-        print(f"Convertendo data: {data_hora_inicio_str}")
         dt_inicio = datetime.fromisoformat(data_hora_inicio_str)
         dt_fim = dt_inicio + timedelta(minutes=duracao_minutos)
-        print(f"Evento: {dt_inicio} até {dt_fim}")
-
         event = {
             "summary": titulo,
             "start": {
@@ -84,32 +65,26 @@ def criar_evento_na_agenda(data):
                 "timeZone": "America/Sao_Paulo",
             },
         }
-        
-        print(f"Criando evento: {event}")
+        print(f"[DEBUG] Evento a ser criado: {event}")
         created_event = service.events().insert(calendarId="primary", body=event).execute()
-        
-        print(f"Evento criado: {created_event.get('htmlLink')}")
-        return f"Evento '{titulo}' criado com sucesso! Link: {created_event.get('htmlLink')}"
-
+        resposta = f"Evento '{titulo}' criado com sucesso! Link: {created_event.get('htmlLink')}"
+        print(f"[DEBUG] Evento criado com sucesso: {created_event.get('htmlLink')}")
+        state["invocation"] = resposta
+        print("[DEBUG] Saindo de criar_evento_na_agenda com sucesso")
+        return state
     except Exception as e:
-        print(f"ERRO na criação do evento: {e}")
-        return f"Ocorreu um erro ao criar o evento: {e}"
+        resposta = f"Ocorreu um erro ao criar o evento: {e}"
+        print(f"[DEBUG] ERRO em criar_evento_na_agenda: {e}")
+        state["invocation"] = resposta
+        return state
     
 
-def email_handler():
+def email_handler(state: Any) -> Any:
     """
     Lê e lista os 10 e-mails mais recentes da caixa de entrada (INBOX) do usuário autenticado no Gmail.
-
-    Retorna:
-        list | str: Uma lista com os assuntos (snippets) dos e-mails encontrados, ou uma mensagem de erro/caso não haja e-mails.
-
-    Requisitos:
-        - O arquivo 'credentials.json' deve estar presente para autenticação Google.
-        - O usuário deve conceder permissão na primeira execução.
+    Atualiza o estado com os e-mails encontrados e a resposta para o usuário.
     """
-
     print(f"FERRAMENTA CHAMADA: listando emails")
-    
     try:
         # Call the Gmail API
         service = get_permission_google_service("gmail","v1")
@@ -120,23 +95,33 @@ def email_handler():
 
         if not messages:
             print("No messages found.")
-            return "Nenhum e-mail encontrado na caixa de entrada."
+            resposta = "Nenhum e-mail encontrado na caixa de entrada."
+            state["invocation"] = resposta
+            return state
 
         print("Messages:")
-        subjects = []
+        emails = []
         for message in messages:
             print(f'Message ID: {message["id"]}')
             msg = (
                 service.users().messages().get(userId="me", id=message["id"]).execute()
             )
             snippet = msg.get("snippet", "(sem assunto)")
-            print(f'  Subject: {snippet}')
-            subjects.append(snippet)
-        return subjects
+            remetente = "(remetente desconhecido)"  # Adapte se quiser extrair o remetente
+            emails.append({"assunto": snippet, "remetente": remetente, "id": message["id"]})
+
+        # Salva os e-mails no estado
+        state["email"]["emails"] = emails
+        # Formata a resposta para o usuário
+        resposta = "Assuntos dos e-mails encontrados:\n" + "\n".join(f"- {e['assunto']}" for e in emails)
+        state["invocation"] = resposta
+        return state
 
     except HttpError as error:
         print(f"An error occurred: {error}")
-        return f"Ocorreu um erro ao listar os e-mails: {error}"
+        resposta = f"Ocorreu um erro ao listar os e-mails: {error}"
+        state["invocation"] = resposta
+        return state
 
 
 def get_email_by_id(email_id):
