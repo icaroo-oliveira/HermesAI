@@ -10,9 +10,9 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 
-SCOPES = ["https://www.googleapis.com/auth/calendar"]
+SCOPES = ["https://www.googleapis.com/auth/calendar","https://www.googleapis.com/auth/gmail.readonly"]
 
-def get_calendar_service():
+def get_permission_google_service(tool_type,version):
     """
     Autentica com a API do Google Calendar e retorna um objeto de serviço.
     Usa o token.json se existir, caso contrário, inicia o fluxo de login.
@@ -33,26 +33,39 @@ def get_calendar_service():
         with open("token.json", "w") as token:
             token.write(creds.to_json())
 
-    return build("calendar", "v3", credentials=creds)
+    return build(tool_type, version, credentials=creds)
 
+#gmail e v1...
 
-@tool
-def criar_evento_na_agenda(titulo: str, data_hora_inicio_str: str, duracao_minutos: int = 60):
+def criar_evento_na_agenda(data):
     """
-    Cria um evento na agenda do Google. Use esta ferramenta para agendar compromissos.
-    Argumentos:
-        titulo (str): O título do evento.
-        data_hora_inicio_str (str): A data e hora de início no formato ISO, ex: '2025-07-10T10:00:00-03:00'.
-        duracao_minutos (int): A duração do evento em minutos. O padrão é 60.
+    Cria um evento no Google Calendar do usuário autenticado.
+
+    Parâmetros:
+        data (dict): Dicionário com as seguintes chaves:
+            - 'titulo' (str, opcional): Título do evento. Padrão: 'Evento'.
+            - 'data_hora_inicio_str' (str, obrigatório): Data e hora de início no formato ISO 8601, ex: '2025-07-10T10:00:00-03:00'.
+            - 'duracao_minutos' (int, opcional): Duração do evento em minutos. Padrão: 60.
+
     Retorna:
-        str: Uma mensagem de confirmação com o link do evento ou uma mensagem de erro.
+        str: Mensagem de confirmação com o link do evento criado, ou mensagem de erro em caso de falha.
+
+    Requisitos:
+        - O arquivo 'credentials.json' deve estar presente para autenticação Google.
+        - O usuário deve conceder permissão na primeira execução.
     """
+    
+    titulo = data.get('titulo', 'Evento')
+    data_hora_inicio_str = data.get('data_hora_inicio_str', None)
+    duracao_minutos = data.get('duracao_minutos', 60)
+    
     print(f"FERRAMENTA CHAMADA: criar_evento_na_agenda")
     print(f"Argumentos recebidos: titulo='{titulo}', data_hora='{data_hora_inicio_str}', duracao={duracao_minutos}")
     
+    
     try:
         print("Obtendo serviço do Google Calendar...")
-        service = get_calendar_service()
+        service = get_permission_google_service("calendar","v3")
         print("Serviço obtido com sucesso!")
 
         print(f"Convertendo data: {data_hora_inicio_str}")
@@ -81,3 +94,78 @@ def criar_evento_na_agenda(titulo: str, data_hora_inicio_str: str, duracao_minut
     except Exception as e:
         print(f"ERRO na criação do evento: {e}")
         return f"Ocorreu um erro ao criar o evento: {e}"
+    
+
+def email_handler():
+    """
+    Lê e lista os 10 e-mails mais recentes da caixa de entrada (INBOX) do usuário autenticado no Gmail.
+
+    Retorna:
+        list | str: Uma lista com os assuntos (snippets) dos e-mails encontrados, ou uma mensagem de erro/caso não haja e-mails.
+
+    Requisitos:
+        - O arquivo 'credentials.json' deve estar presente para autenticação Google.
+        - O usuário deve conceder permissão na primeira execução.
+    """
+
+    print(f"FERRAMENTA CHAMADA: listando emails")
+    
+    try:
+        # Call the Gmail API
+        service = get_permission_google_service("gmail","v1")
+        results = (
+            service.users().messages().list(userId="me", labelIds=["INBOX"], maxResults=10).execute()
+        )
+        messages = results.get("messages", [])
+
+        if not messages:
+            print("No messages found.")
+            return "Nenhum e-mail encontrado na caixa de entrada."
+
+        print("Messages:")
+        subjects = []
+        for message in messages:
+            print(f'Message ID: {message["id"]}')
+            msg = (
+                service.users().messages().get(userId="me", id=message["id"]).execute()
+            )
+            snippet = msg.get("snippet", "(sem assunto)")
+            print(f'  Subject: {snippet}')
+            subjects.append(snippet)
+        return subjects
+
+    except HttpError as error:
+        print(f"An error occurred: {error}")
+        return f"Ocorreu um erro ao listar os e-mails: {error}"
+
+
+def get_email_by_id(email_id):
+    """
+    Busca e retorna detalhes de um e-mail específico pelo ID na conta Gmail autenticada.
+
+    Parâmetros:
+        email_id (str): O ID do e-mail a ser buscado.
+    Retorna:
+        dict | str: Dicionário com informações do e-mail (assunto, remetente, data, snippet), ou mensagem de erro.
+    Requisitos:
+        - O arquivo 'credentials.json' deve estar presente para autenticação Google.
+        - O usuário deve conceder permissão na primeira execução.
+    """
+    try:
+        service = get_permission_google_service("gmail", "v1")
+        msg = service.users().messages().get(userId="me", id=email_id, format="full").execute()
+        headers = msg.get("payload", {}).get("headers", [])
+        subject = next((h["value"] for h in headers if h["name"] == "Subject"), "(sem assunto)")
+        from_ = next((h["value"] for h in headers if h["name"] == "From"), "(remetente desconhecido)")
+        date = next((h["value"] for h in headers if h["name"] == "Date"), "(data desconhecida)")
+        snippet = msg.get("snippet", "")
+        return {
+            "assunto": subject,
+            "remetente": from_,
+            "data": date,
+            "snippet": snippet,
+            "id": email_id
+        }
+    except Exception as e:
+        print(f"Erro ao buscar e-mail por ID: {e}")
+        return f"Ocorreu um erro ao buscar o e-mail: {e}"
