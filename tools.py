@@ -1,7 +1,7 @@
 import os.path
 from typing import Any
 
-
+from datetime import datetime, timedelta
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -154,3 +154,57 @@ def get_email_by_id(email_id):
     except Exception as e:
         print(f"Erro ao buscar e-mail por ID: {e}")
         return f"Ocorreu um erro ao buscar o e-mail: {e}"
+
+
+
+def buscar_eventos_no_intervalo(state, inicio: datetime, fim: datetime):
+    """
+    Busca todos os eventos do Google Calendar do usuário autenticado entre os horários inicio e fim.
+    Retorna uma lista de eventos.
+    """
+    print(f"[DEBUG] Buscando eventos entre {inicio} e {fim}")
+    try:
+        service = get_permission_google_service("calendar", "v3")
+        # Força timezone fixo -03:00 (America/Sao_Paulo)
+        time_min = inicio.strftime('%Y-%m-%dT%H:%M:%S-03:00')
+        time_max = fim.strftime('%Y-%m-%dT%H:%M:%S-03:00')
+        events_result = service.events().list(
+            calendarId="primary",
+            timeMin=time_min,
+            timeMax=time_max,
+            singleEvents=True,
+            orderBy="startTime"
+        ).execute()
+        eventos = events_result.get("items", [])
+        print(f"[DEBUG] {len(eventos)} eventos encontrados no intervalo.")
+        return eventos
+    except Exception as e:
+        print(f"[DEBUG] Erro ao buscar eventos: {e}")
+        return []
+
+def existe_conflito_agenda(state, inicio: datetime, fim: datetime):
+    """
+    Retorna True se houver algum evento no intervalo [inicio, fim), False caso contrário.
+    """
+    eventos = buscar_eventos_no_intervalo(state, inicio, fim)
+    return len(eventos) > 0
+
+def listar_eventos_periodo(state, data_inicial, data_final=None):
+    """
+    Busca e lista todos os eventos do Google Calendar do usuário entre data_inicial e data_final.
+    Se data_final não for passado, busca só do dia de data_inicial.
+    Atualiza state['invocation'] com a resposta formatada.
+    """
+    if data_final is None:
+        data_final = data_inicial + timedelta(days=1)
+    eventos = buscar_eventos_no_intervalo(state, data_inicial, data_final)
+    if not eventos:
+        resposta = f"Você não tem compromissos para o período solicitado."
+    else:
+        resposta = f"Seus compromissos de {data_inicial.strftime('%d/%m/%Y')} até {data_final.strftime('%d/%m/%Y')}:\n"
+        for ev in eventos:
+            hora = ev.get('start', {}).get('dateTime', '')
+            resumo = ev.get('summary', '(sem título)')
+            resposta += f"- {resumo} às {hora}\n"
+    state['invocation'] = resposta.strip()
+    return state
