@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 import chainlit as cl
 from typing import TypedDict, Optional, List, Dict, Any
 from graph_setup import build_graph
+from utils import obter_previsao_tempo_weatherapi
 
 class AgendaData(TypedDict, total=False):
     titulo: Optional[str]
@@ -40,7 +41,11 @@ async def start():
     chat_histories[session] = initial_state
     compiled_graph = build_graph(IcarusState)
     chat_histories[session + "_graph"] = compiled_graph
-    await cl.Message(content="Olá! Sou Icarus, seu assistente pessoal. Posso ajudar com conversas, agendar eventos na sua agenda e ler seus e-mails do Gmail! Como posso ajudar?").send()
+    previsao = obter_previsao_tempo_weatherapi()
+    mensagem_inicial = (
+        "Olá! Sou Icarus, seu assistente pessoal. Posso ajudar com conversas, agendar eventos na sua agenda e ler seus e-mails do Gmail! Como posso ajudar?\n\n" + previsao
+    )
+    await cl.Message(content=mensagem_inicial).send()
 
 @cl.on_message
 async def main(message: cl.Message):
