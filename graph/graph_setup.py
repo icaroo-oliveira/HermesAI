@@ -2,7 +2,7 @@ from langgraph.graph import StateGraph, START, END
 from utils.utils import add_to_history
 from tools.websearch import buscar_na_web_duckduckgo
 from tools.agenda import criar_evento_na_agenda, listar_eventos_periodo, existe_conflito_agenda
-from tools.email import email_handler
+from tools.email import email_handler, send_email_handler
 from tools.weather import obter_previsao_tempo_weatherapi
 from utils.llm_utils import llm_ask
 from typing import Any
@@ -19,6 +19,7 @@ Você é Icarus, um assistente pessoal inteligente e contextual. Analise a mensa
 
 - AGENDAR: quando o usuário pede para marcar, adicionar ou alterar um compromisso, evento ou reunião.
 - EMAIL: quando o usuário pede para ler, buscar ou listar e-mails.
+- ENVIAR_EMAIL: quando o usuário pede para enviar, mandar ou escrever um e-mail para alguém.
 - LISTAR_EVENTOS: quando o usuário pede para ver compromissos, agenda, eventos futuros ou passados.
 - BUSCAR_WEB: quando o usuário pede informações externas, como notícias, fatos, pesquisas, previsão do tempo, etc.
 - CONVERSAR: quando o usuário está apenas conversando, fazendo comentários, perguntas retóricas, piadas, ou não faz um pedido de ação claro.
@@ -26,7 +27,7 @@ Você é Icarus, um assistente pessoal inteligente e contextual. Analise a mensa
 REGRAS:
 - Analise o contexto, o tom e a intenção da mensagem.
 - Considere o histórico recente da conversa: se o usuário pedir para repetir, mostrar novamente, detalhar, relembrar ou referenciar uma ação já realizada (como links buscados, evento agendado, e-mails lidos, etc.), responda com base no histórico, sem acionar a ferramenta novamente.
-- Só acione BUSCAR_WEB, AGENDAR, EMAIL ou LISTAR_EVENTOS se houver um pedido claro ou implícito de ação nova.
+- Só acione BUSCAR_WEB, AGENDAR, EMAIL, ENVIAR_EMAIL ou LISTAR_EVENTOS se houver um pedido claro ou implícito de ação nova.
 - Se a mensagem for apenas um comentário, curiosidade, piada ou pergunta retórica, classifique como CONVERSAR.
 - Se houver múltiplos pedidos, retorne todas as ações relevantes, separadas por vírgula, na ordem em que aparecem na mensagem.
 - Responda apenas com as palavras-chave das ações, separadas por vírgula, sem explicações.
@@ -102,6 +103,15 @@ Resposta: EMAIL, LISTAR_EVENTOS
 Usuário: "Me mostre meus e-mails, minha agenda e pesquise notícias do Flamengo"
 Resposta: EMAIL, LISTAR_EVENTOS, BUSCAR_WEB
 
+Usuário: "Envie um e-mail para joao@exemplo.com com assunto 'Reunião' e mensagem 'Vamos nos encontrar amanhã'"
+Resposta: ENVIAR_EMAIL
+
+Usuário: "Mande um e-mail para maria@empresa.com sobre a proposta"
+Resposta: ENVIAR_EMAIL
+
+Usuário: "Escreva um e-mail para o cliente sobre o projeto"
+Resposta: ENVIAR_EMAIL
+
 Mensagem do usuário: {mensagem_usuario}
 '''.replace('{mensagem_usuario}', state["user_input"])
 
@@ -110,7 +120,7 @@ Mensagem do usuário: {mensagem_usuario}
 
     #limpa e extrai as decisões
     decisoes = [d.strip() for d in re.split(r'[,\n]+', resposta) if d.strip() in {
-        "AGENDAR", "EMAIL", "LISTAR_EVENTOS", "BUSCAR_WEB", "CONVERSAR"
+        "AGENDAR", "EMAIL", "ENVIAR_EMAIL", "LISTAR_EVENTOS", "BUSCAR_WEB", "CONVERSAR"
     }]
 
     #atualiza o estado
@@ -213,6 +223,7 @@ def build_graph(IcarusState):
     graph.add_node("executar_acoes_em_ordem", executar_acoes_em_ordem)
     graph.add_node("make_appointment", make_agendar_node())
     graph.add_node("email_handler", email_handler)
+    graph.add_node("send_email_handler", send_email_handler)
     graph.add_node("conversa_node", conversa_node)
     graph.add_node("listar_eventos_periodo_node", make_listar_eventos_periodo_node())
     graph.add_node("extrair_datas_agendamento_llm_node", extrair_datas_agendamento_llm_node)
@@ -234,6 +245,7 @@ def build_graph(IcarusState):
         {
             "AGENDAR": "extrair_datas_agendamento_llm_node",
             "EMAIL": "email_handler",
+            "ENVIAR_EMAIL": "send_email_handler",
             "LISTAR_EVENTOS": "extrair_datas_listagem_llm_node",
             "CONVERSAR": "conversa_node",
             "BUSCAR_WEB": "buscar_internet",
@@ -249,6 +261,7 @@ def build_graph(IcarusState):
     graph.add_edge("extrair_datas_listagem_llm_node", "listar_eventos_periodo_node")
     graph.add_edge("listar_eventos_periodo_node", "add_assistant_history")
     graph.add_edge("email_handler", "add_assistant_history")
+    graph.add_edge("send_email_handler", "add_assistant_history")
     graph.add_edge("conversa_node", "add_assistant_history")
 
     #buscar na web
