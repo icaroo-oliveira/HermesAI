@@ -2,7 +2,7 @@
 
 ## ✨ O que é?
 
-O **IcarusMessenger** é um assistente pessoal inteligente, com memória vetorial persistente (FAISS), integração com Google Agenda, e-mail, busca na web, previsão do tempo e muito mais. Ele aprende com o usuário, lembra de fatos importantes e responde de forma contextual.
+O **HermesAI** é um assistente pessoal inteligente, com memória vetorial persistente (FAISS), integração com Google Agenda, e-mail, busca na web, previsão do tempo e muito mais. Ele aprende com o usuário, lembra de fatos importantes e responde de forma contextual.
 
 ---
 
@@ -56,7 +56,7 @@ O **IcarusMessenger** é um assistente pessoal inteligente, com memória vetoria
 
 ## 🤖 Uso do LLM (Hugging Face)
 
-- O IcarusMessenger utiliza o modelo Llama 3 (ou similar) via Hugging Face Inference API.
+- O HermesAI utiliza o modelo Llama 3 (ou similar) via Hugging Face Inference API.
 - É necessário um token de autenticação Hugging Face (`HUGGINGFACEHUB_API_TOKEN`).
 - O LLM é chamado via LangChain, com prompts customizados e contexto recuperado da memória vetorial.
 
@@ -110,7 +110,7 @@ Para acessar sua agenda e e-mails, siga este passo a passo para configurar o OAu
 ## 📂 Estrutura de Pastas
 
 ```
-IcarusMessenger/
+HermesAI/
 ├── app.py
 ├── faiss_memory/
 │   └── memory.py
@@ -147,7 +147,7 @@ WEATHER_API_KEY=seu_token_weatherapi
 
 ### 3. Configure o Google para agenda e e-mail
 
-- Siga as instruções da seção "Configuração do Google Agenda e Gmail" acima.
+- Siga as instruções da seção "Configuração do Google Calendar & Gmail via API" acima.
 - Coloque o `credentials.json` na raiz do projeto.
 
 ### 4. Rode o assistente
@@ -157,7 +157,7 @@ chainlit run app.py -w --port 8500
 ```
 
 - Acesse em [http://localhost:8500](http://localhost:8500)
-- Converse com o Icarus e experimente as funcionalidades!
+- Converse com o HermesAI e experimente as funcionalidades!
 
 ---
 
