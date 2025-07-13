@@ -9,6 +9,7 @@ from typing import Any
 import re
 from utils.date_extractor import extrair_datas_periodo_llm
 from .state_types import IcarusState
+from faiss_memory.memory import long_term_memory
 
 
 # Nó decisor

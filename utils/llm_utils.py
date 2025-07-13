@@ -2,7 +2,7 @@ from langchain_core.messages import HumanMessage
 from langchain_huggingface import ChatHuggingFace, HuggingFaceEndpoint
 import os
 from dotenv import load_dotenv
-from .memory import long_term_memory
+from faiss_memory.memory import long_term_memory
 
 load_dotenv()
 hf_token = os.environ["HUGGINGFACEHUB_API_TOKEN"]
