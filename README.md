@@ -6,6 +6,20 @@ O **IcarusMessenger** é um assistente pessoal inteligente, com memória vetoria
 
 ---
 
+## 🛠️ Stack Tecnológica
+
+- **Python 3.8+**
+- **FAISS** — indexação e busca vetorial para memória de longo prazo
+- **Sentence Transformers (Hugging Face)** — embeddings de texto
+- **LangChain** — orquestração de LLMs e fluxos conversacionais
+- **Chainlit** — interface de chat interativa
+- **Google API Client** — integração com Google Calendar e Gmail
+- **WeatherAPI** — previsão do tempo
+- **Requests, BeautifulSoup** — utilidades para web scraping e requisições
+- **dotenv** — gerenciamento de variáveis de ambiente
+
+---
+
 ## 🚀 Funcionalidades Atuais
 
 - **Memória vetorial persistente (FAISS):**
