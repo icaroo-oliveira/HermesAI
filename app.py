@@ -37,7 +37,7 @@ async def start():
 async def main(message: cl.Message):
     session = cl.user_session.get("id")
     state = chat_histories.get(session)
-    compiled_graph = chat_histories.get(session + "_graph")
+    compiled_graph = chat_histories.get(session + "_graph") #varias usaruarios
     state["user_input"] = message.content
     # Limpa a lista de respostas antes de processar nova mensagem
     state["invocations_list"] = []

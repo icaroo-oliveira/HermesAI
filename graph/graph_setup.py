@@ -9,6 +9,7 @@ from typing import Any
 import re
 from utils.date_extractor import extrair_datas_periodo_llm
 from .state_types import IcarusState
+from faiss_memory.memory import long_term_memory
 
 
 # Nó decisor
@@ -27,8 +28,9 @@ Você é Icarus, um assistente pessoal inteligente e contextual. Analise a mensa
 REGRAS:
 - Analise o contexto, o tom e a intenção da mensagem.
 - Considere o histórico recente da conversa: se o usuário pedir para repetir, mostrar novamente, detalhar, relembrar ou referenciar uma ação já realizada (como links buscados, evento agendado, e-mails lidos, etc.), responda com base no histórico, sem acionar a ferramenta novamente.
-- Só acione BUSCAR_WEB, AGENDAR, EMAIL, ENVIAR_EMAIL ou LISTAR_EVENTOS se houver um pedido claro ou implícito de ação nova.
-- Se a mensagem for apenas um comentário, curiosidade, piada ou pergunta retórica, classifique como CONVERSAR.
+- Só acione BUSCAR_WEB, AGENDAR, EMAIL, ENVIAR_EMAIL ou LISTAR_EVENTOS se houver um pedido CLARO e EXPLÍCITO de ação nova.
+- AGENDAR: apenas quando o usuário pedir para "marcar", "agendar", "criar evento", "lembrar de" com data/hora específica.
+- Se a mensagem for apenas um comentário, curiosidade, piada, pergunta retórica, ou compartilhamento de informações pessoais, classifique como CONVERSAR.
 - Se houver múltiplos pedidos, retorne todas as ações relevantes, separadas por vírgula, na ordem em que aparecem na mensagem.
 - Responda apenas com as palavras-chave das ações, separadas por vírgula, sem explicações.
 - Não invente ações. Se não tiver certeza, prefira CONVERSAR.
@@ -61,8 +63,11 @@ Resposta: CONVERSAR
 Usuário: "Traduza esse texto e me diga quem é o presidente do Brasil"
 Resposta: CONVERSAR, BUSCAR_WEB
 
-Usuário: "Me lembre de comprar pão e veja se vai chover amanhã"
-Resposta: AGENDAR, BUSCAR_WEB
+Usuário: "Me lembre de comprar pão amanhã às 10h"
+Resposta: AGENDAR
+
+Usuário: "Vou comprar pão amanhã"
+Resposta: CONVERSAR
 
 Usuário: "Qual a previsão do tempo para amanhã?"
 Resposta: BUSCAR_WEB
@@ -70,7 +75,7 @@ Resposta: BUSCAR_WEB
 Usuário: "Você gosta de futebol?"
 Resposta: CONVERSAR
 
-Usuário: "Me envie meus e-mails e marque dentista para sexta"
+Usuário: "Me envie meus e-mails e marque dentista para sexta às 14h"
 Resposta: EMAIL, AGENDAR
 
 Usuário: "Quais meus compromissos amanhã?"
@@ -88,13 +93,13 @@ Resposta: BUSCAR_WEB, EMAIL
 Usuário: "Bom dia!"
 Resposta: CONVERSAR
 
-Usuário: "Me lembre de estudar e me diga as notícias do dia"
+Usuário: "Me lembre de estudar amanhã às 9h e me diga as notícias do dia"
 Resposta: AGENDAR, BUSCAR_WEB
 
 Usuário: "Você sabe quando é o próximo feriado?"
 Resposta: BUSCAR_WEB
 
-Usuário: "Marque reunião para amanhã e me diga se vai chover"
+Usuário: "Marque reunião para amanhã às 15h e me diga se vai chover"
 Resposta: AGENDAR, BUSCAR_WEB
 
 Usuário: "Meus e-mails e compromissos de hoje, por favor"
@@ -112,11 +117,20 @@ Resposta: ENVIAR_EMAIL
 Usuário: "Escreva um e-mail para o cliente sobre o projeto"
 Resposta: ENVIAR_EMAIL
 
+Usuário: "Eu nasci em 2001"
+Resposta: CONVERSAR
+
+Usuário: "Meu nome é João"
+Resposta: CONVERSAR
+
+Usuário: "Gosto de futebol"
+Resposta: CONVERSAR
+
 Mensagem do usuário: {mensagem_usuario}
 '''.replace('{mensagem_usuario}', state["user_input"])
 
-    #faz a chamada ao LLM
-    resposta = (await llm_ask(decision_prompt, state["messages"])).strip().upper()
+    #faz a chamada ao LLM com memória de longo prazo
+    resposta = (await llm_ask(decision_prompt, state["messages"], store_in_memory=False, user_input=state["user_input"])).strip().upper()
 
     #limpa e extrai as decisões
     decisoes = [d.strip() for d in re.split(r'[,\n]+', resposta) if d.strip() in {
@@ -175,8 +189,30 @@ def make_agendar_node():
 
 # Nó de conversa
 async def conversa_node(state: Any) -> Any:
-    resposta = await llm_ask(state["user_input"], state["messages"])
+    prompt_melhorado = f"""
+Você é o Icarus, um assistente pessoal inteligente com memória de longo prazo.
+
+INSTRUÇÕES IMPORTANTES:
+1. Sempre verifique se há informações relevantes nas conversas anteriores (contexto fornecido).
+2. Se o usuário perguntar sobre algo que JÁ FOI mencionado antes, responda com base na memória e diga que lembra.
+3. Se o usuário compartilhar uma informação pela PRIMEIRA VEZ, aja normalmente, sem fingir que já sabia.
+4. Se não souber algo, seja honesto e peça mais informações.
+5. Seja natural e conversacional, mas sempre use a memória quando relevante.
+
+PERGUNTA DO USUÁRIO: {state["user_input"]}
+
+Responda de forma natural e útil, considerando o contexto das conversas anteriores acima. 
+Se for a primeira vez que o usuário compartilha uma informação, agradeça ou reconheça normalmente. 
+Se já souber, diga que lembra!
+"""
+    resposta = await llm_ask(prompt_melhorado, state["messages"], store_in_memory=True, user_input=state["user_input"])
     state["invocation"] = resposta
+
+    # Adiciona à lista de invocações para múltiplas ações
+    if "invocations_list" not in state:
+        state["invocations_list"] = []
+    state["invocations_list"].append(resposta)
+
     return state
 
 
