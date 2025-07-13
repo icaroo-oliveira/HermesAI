@@ -12,6 +12,7 @@ O **HermesAI** é um assistente pessoal inteligente, com memória vetorial persi
 - **FAISS** — indexação e busca vetorial para memória de longo prazo
 - **Sentence Transformers (Hugging Face)** — embeddings de texto
 - **LangChain** — orquestração de LLMs e fluxos conversacionais
+- **LangGraph** — orquestração de fluxos conversacionais baseados em grafos
 - **Chainlit** — interface de chat interativa
 - **Google API Client** — integração com Google Calendar e Gmail
 - **WeatherAPI** — previsão do tempo
