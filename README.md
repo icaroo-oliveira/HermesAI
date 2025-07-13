@@ -1,4 +1,4 @@
-# IcarusMessenger
+# HermesAI
 
 ## ✨ O que é?
 
