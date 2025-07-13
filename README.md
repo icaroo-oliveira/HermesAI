@@ -190,10 +190,4 @@ chainlit run app.py -w --port 8500
 - [ ] Limpeza/gerenciamento de memória
 - [ ] Segurança multiusuário
 
----
-
-## 🤝 Contribuição
-
-Sugestões, bugs ou ideias?  
-Abra uma issue ou envie um PR!
 
