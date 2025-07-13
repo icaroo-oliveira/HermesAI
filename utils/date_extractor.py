@@ -1,4 +1,4 @@
-from llm_utils import llm_ask
+from .llm_utils import llm_ask
 from datetime import datetime, timedelta
 import re
 

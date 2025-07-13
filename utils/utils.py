@@ -2,7 +2,7 @@ import os
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import quote, urlparse, parse_qs, unquote
-from state_types import IcarusState
+from graph.state_types import IcarusState
 
 def add_to_history(state, role, content):
     state["messages"].append({"role": role, "content": content})

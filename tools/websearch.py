@@ -1,7 +1,7 @@
 from urllib.parse import quote, urlparse, parse_qs, unquote
 import requests
 from bs4 import BeautifulSoup
-from state_types import IcarusState
+from graph.state_types import IcarusState
 
 def buscar_na_web_duckduckgo(state: IcarusState) -> IcarusState:
     query = state["user_input"]  

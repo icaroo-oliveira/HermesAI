@@ -1,14 +1,14 @@
 from langgraph.graph import StateGraph, START, END
-from utils import add_to_history
+from utils.utils import add_to_history
 from tools.websearch import buscar_na_web_duckduckgo
 from tools.agenda import criar_evento_na_agenda, listar_eventos_periodo, existe_conflito_agenda
 from tools.email import email_handler
 from tools.weather import obter_previsao_tempo_weatherapi
-from llm_utils import llm_ask, extract_event_prompt
+from utils.llm_utils import llm_ask
 from typing import Any
 import re
-from date_extractor import extrair_datas_periodo_llm
-from state_types import IcarusState
+from utils.date_extractor import extrair_datas_periodo_llm
+from .state_types import IcarusState
 
 
 # Nó decisor
