@@ -40,9 +40,7 @@ O **HermesAI** é um assistente pessoal inteligente, com memória vetorial persi
   - Responde perguntas e busca notícias.
 - **Execução de múltiplas intenções:** 
   - Entende e executa vários pedidos em uma só mensagem.
-- **Separação de estado de conversa por sessão:** 
-  - Cada usuário tem seu próprio fluxo de diálogo (RAM).
-
+  
 ---
 
 ## 🧠 Como funciona a memória vetorial FAISS?
